@@ -145,22 +145,17 @@
 
   <script>
   /* ====== API URL (Apps Script Web App URL 붙여넣기) ====== */
-  // 예: const API_URL = 'https://script.google.com/macros/s/AKfycb.../exec';
-  /* ====== API URL (Apps Script Web App URL 붙여넣기) ====== */
-const API_URL = 'https://script.google.com/macros/s/AKfycbzOthVTP5HWvaM0tilcCkGdWeGRQorujETP_Z61l7MYHEoUlFLdnqqSjQBYaarvYDjq/exec';
+  const API_URL = 'https://script.google.com/macros/s/AKfycbzOthVTP5HWvaM0tilcCkGdWeGRQorujETP_Z61l7MYHEoUlFLdnqqSjQBYaarvYDjq/exec';
 
-
-  // ====== State ======
+  // ====== State & helpers ======
   const $ = (s, el=document)=>el.querySelector(s);
   const $$ = (s, el=document)=>[...el.querySelectorAll(s)];
   const state = { q:'', categories:[], selectedCats:new Set(), rows:[] };
-
   const loadingOn  = ()=>{ const el = $('#loading'); if (el) el.classList.remove('hidden'); };
   const loadingOff = ()=>{ const el = $('#loading'); if (el) el.classList.add('hidden'); };
-
-  // ====== API ======
   const hasValidApi = /^https?:\/\/.+\/exec(\?|$)/.test(API_URL);
 
+  // ====== API ======
   async function apiGET(params={}) {
     if (!hasValidApi) throw new Error('API_URL 미설정');
     const url = API_URL + '?' + new URLSearchParams(params).toString();
@@ -172,24 +167,77 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbzOthVTP5HWvaM0tilcCkGd
     if (!hasValidApi) throw new Error('API_URL 미설정');
     const res = await fetch(API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain' }, // Apps Script에서 e.postData.contents로 파싱
+      headers: { 'Content-Type': 'text/plain' }, // Apps Script: e.postData.contents
       body: JSON.stringify(payload)
     });
     if (!res.ok) throw new Error('HTTP '+res.status);
     return res.json();
   }
 
+  // ====== 카테고리 패널 ======
+  function renderCategories() {
+    const wrap = $('#catList'); wrap.innerHTML='';
+    state.categories.forEach(cat=>{
+      const row = document.createElement('div');
+      row.className = 'flex items-center gap-2';
+      row.innerHTML = `
+        <label class="flex items-center gap-2 flex-1">
+          <input type="checkbox" class="catChk" value="${cat}" ${state.selectedCats.has(cat)?'checked':''}>
+          <span>${cat}</span>
+        </label>
+        <button class="btn red text-xs delCat hidden" data-cat="${cat}">❌</button>
+      `;
+      wrap.appendChild(row);
+    });
+    fillCategorySelect();
+    const editing = !$('#catEditArea').classList.contains('hidden');
+    $$('.delCat').forEach(b=> b.classList.toggle('hidden', !editing));
+  }
+  function fillCategorySelect(){
+    const sel = $('#categorySelect'); sel.innerHTML='';
+    state.categories.forEach(c=>{
+      const opt = document.createElement('option'); opt.value=c; opt.textContent=c; sel.appendChild(opt);
+    });
+  }
+
+  // ====== 테이블 ======
+  function rowMatches(r){
+    if (state.selectedCats.size && !state.selectedCats.has(r.category)) return false;
+    const q = state.q.trim().toLowerCase();
+    if (!q) return true;
+    const hay = [r.name,r.url,r.username,r.password,r.note,r.category].join(' ').toLowerCase();
+    return hay.includes(q);
+  }
+  function renderTable(){
+    const list = state.rows.filter(rowMatches);
+    $('#summary').textContent = `총 ${state.rows.length}개 중 ${list.length}개 표시`;
+    const tbody = $('#tbody'); tbody.innerHTML = '';
+    list.forEach(r=>{
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${r.name || '-'}</td>
+        <td><a class="text-blue-700 hover:underline" href="${r.url || '#'}" target="_blank">${(r.url||'').replace(/^https?:\/\/\/?/,'')}</a></td>
+        <td>${r.username || '-'}</td>
+        <td>${r.password || '-'}</td>
+        <td><span class="badge">${r.category || '-'}</span></td>
+        <td><button class="btn blue editRow" data-id="${r.id}">수정</button></td>
+        <td><button class="btn red delRow" data-id="${r.id}">삭제</button></td>
+      `;
+      tbody.appendChild(tr);
+    });
+    $('#empty').classList.toggle('hidden', list.length>0);
+  }
+
+  // ====== 초기 로드 ======
   async function loadAll() {
     loadingOn();
     try {
       if (!hasValidApi) {
-        // 🔧 API_URL이 아직 비어있어도 UI는 먼저 살아있게 기본 카테고리/빈 목록 세팅
         state.rows = [];
         state.categories = ['쇼핑몰','관리자','개발','업체'];
         state.selectedCats = new Set(state.categories);
-        renderCategories();
-        renderTable();
-        console.warn('API_URL이 설정되지 않아 시트 연결을 건너뜀. API_URL 채우면 실데이터로 동작합니다.');
+        renderCategories(); renderTable();
+        console.warn('API_URL 미설정: UI만 표시됩니다.');
         return;
       }
       const data = await apiGET({ action:'list' });
@@ -197,21 +245,158 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbzOthVTP5HWvaM0tilcCkGd
       state.rows = data.accounts || [];
       state.categories = (data.categories || []).length ? data.categories : ['쇼핑몰','관리자','개발','업체'];
       state.selectedCats = new Set(state.categories);
-      renderCategories();
-      renderTable();
+      renderCategories(); renderTable();
     } catch (e) {
       alert('데이터 로드 실패: ' + e.message);
-      // 실패해도 UI는 빈 상태로 작동
       if (!state.categories.length) {
         state.categories = ['쇼핑몰','관리자','개발','업체'];
         state.selectedCats = new Set(state.categories);
-        renderCategories();
-        renderTable();
+        renderCategories(); renderTable();
       }
     } finally { loadingOff(); }
   }
-  /* 나머지 기존 코드(카테고리/테이블/모달/이벤트/초기 loadAll 호출)는 그대로 두세요 */
+
+  // ====== 모달 ======
+  const modalBg = $('#modalBg');
+  const openModal = (title)=>{ $('#modalTitle').textContent=title; modalBg.style.display='flex'; };
+  const closeModal = ()=>{ modalBg.style.display='none'; $('#siteForm').reset(); $('[name=id]').value=''; };
+
+  // ====== 이벤트 바인딩 ======
+  // 상단 버튼/검색
+  $('#addBtn').addEventListener('click', ()=>{ fillCategorySelect(); openModal('사이트 추가'); });
+  $('#q').addEventListener('input', e=>{
+    state.q = e.target.value;
+    $('#clearQ').classList.toggle('hidden', !state.q);
+    renderTable();
+  });
+  $('#clearQ').addEventListener('click', ()=>{
+    $('#q').value=''; state.q=''; $('#clearQ').classList.add('hidden'); renderTable();
+  });
+
+  // 모달
+  $('#closeModal').addEventListener('click', closeModal);
+  $('#cancelForm').addEventListener('click', closeModal);
+  modalBg.addEventListener('click', (e)=>{ if (e.target===modalBg) closeModal(); });
+
+  // 행 수정/삭제
+  document.addEventListener('click', (e)=>{
+    if (e.target.matches('.editRow')){
+      const id = e.target.getAttribute('data-id');
+      const row = state.rows.find(x=>String(x.id)===String(id));
+      if (!row) return;
+      openModal('사이트 수정');
+      $('[name=id]').value = row.id;
+      $('[name=name]').value = row.name || '';
+      $('[name=url]').value = row.url || '';
+      $('[name=username]').value = row.username || '';
+      $('[name=password]').value = row.password || '';
+      fillCategorySelect();
+      $('[name=category]').value = row.category || (state.categories[0]||'');
+      $('[name=note]').value = row.note || '';
+    }
+  });
+  document.addEventListener('click', async (e)=>{
+    if (e.target.matches('.delRow')){
+      const id = e.target.getAttribute('data-id');
+      if (!confirm('이 항목을 삭제할까요?')) return;
+      loadingOn();
+      try{
+        const res = await apiPOST({ action:'deleteAccount', id });
+        if (!res.ok) throw new Error(res.error || 'delete failed');
+        state.rows = state.rows.filter(x=>String(x.id)!==String(id));
+        renderTable();
+      } catch(err){ alert('삭제 실패: ' + err.message); }
+      finally{ loadingOff(); }
+    }
+  });
+
+  // 폼 저장
+  $('#siteForm').addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const id = (fd.get('id')||'').toString();
+    const name = (fd.get('name')||'').toString().trim();
+    let url = (fd.get('url')||'').toString().trim();
+    if (!name || !url) { alert('사이트 이름과 링크는 필수입니다.'); return; }
+    if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+    const item = {
+      id, name, url,
+      username: (fd.get('username')||'').toString(),
+      password: (fd.get('password')||'').toString(),
+      category: (fd.get('category')||'').toString() || (state.categories[0]||''),
+      note: (fd.get('note')||'').toString()
+    };
+    loadingOn();
+    try{
+      const res = await apiPOST({ action:'upsertAccount', item });
+      if (!res.ok) throw new Error(res.error || 'save failed');
+      await loadAll(); // 저장 후 재로드
+      closeModal();
+    } catch(err){ alert('저장 실패: ' + err.message); }
+    finally{ loadingOff(); }
+  });
+
+  // 카테고리 편집/필터
+  $('#catEditToggle').addEventListener('click', ()=>{
+    const area = $('#catEditArea');
+    const nowHidden = area.classList.toggle('hidden');
+    $('#catEditToggle').textContent = nowHidden ? '수정' : '수정 종료';
+    $$('.delCat').forEach(b=> b.classList.toggle('hidden', nowHidden));
+  });
+  $('#addCat').addEventListener('click', async ()=>{
+    const v = ($('#newCat').value||'').trim();
+    if (!v) return;
+    loadingOn();
+    try{
+      const res = await apiPOST({ action:'addCategory', name:v });
+      if (!res.ok) throw new Error(res.error||'addCategory failed');
+      $('#newCat').value='';
+      const r = await apiGET({ action:'categories' });
+      state.categories = r.categories || [];
+      renderCategories(); renderTable();
+    } catch(err){ alert('카테고리 추가 실패: ' + err.message); }
+    finally{ loadingOff(); }
+  });
+  document.addEventListener('click', async (e)=>{
+    if (e.target.matches('.delCat')) {
+      const cat = e.target.getAttribute('data-cat');
+      if (!confirm(`[${cat}] 카테고리를 삭제할까요?`)) return;
+      loadingOn();
+      try{
+        const res = await apiPOST({ action:'deleteCategory', name:cat });
+        if (!res.ok) throw new Error(res.error||'deleteCategory failed');
+        const r = await apiGET({ action:'categories' });
+        state.categories = r.categories || [];
+        state.selectedCats.delete(cat);
+        renderCategories(); renderTable();
+      } catch(err){ alert('카테고리 삭제 실패: ' + err.message); }
+      finally{ loadingOff(); }
+    }
+  });
+  $('#resetCats').addEventListener('click', async ()=>{
+    if (!confirm('카테고리를 기본 4개(쇼핑몰/관리자/개발/업체)로 초기화할까요?')) return;
+    loadingOn();
+    try{
+      const res = await apiPOST({ action:'resetCategories' });
+      if (!res.ok) throw new Error(res.error||'resetCategories failed');
+      state.categories = res.categories || ['쇼핑몰','관리자','개발','업체'];
+      state.selectedCats = new Set(state.categories);
+      renderCategories(); renderTable();
+    } catch(err){ alert('초기화 실패: ' + err.message); }
+    finally{ loadingOff(); }
+  });
+  document.addEventListener('change', (e)=>{
+    if (e.target.matches('.catChk')) {
+      const v = e.target.value;
+      if (e.target.checked) state.selectedCats.add(v); else state.selectedCats.delete(v);
+      renderTable();
+    }
+  });
+
+  // ====== 마지막에 반드시 호출! ======
+  loadAll();
 </script>
+
 
 </body>
 </html>
