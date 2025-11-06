@@ -7,7 +7,6 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     html { font-family: ui-sans-serif, -apple-system, Segoe UI, Roboto, 'Noto Sans KR', Apple SD Gothic Neo, 'Malgun Gothic', Helvetica, Arial, sans-serif; }
-    .sticky-col { position: sticky; top: 88px; max-height: calc(100vh - 100px); overflow:auto; }
     .table { width: 100%; border-collapse: collapse; }
     .table th, .table td { padding: 10px 12px; border-bottom: 1px solid #e5e7eb; vertical-align: middle; }
     .table th { text-align: left; font-weight: 600; color: #475569; background: #f8fafc; }
@@ -22,21 +21,51 @@
     .spinner { width:16px; height:16px; border:2px solid #cbd5e1; border-top-color:#334155; border-radius:9999px; animation:spin 1s linear infinite; display:inline-block;}
     @keyframes spin{to{transform:rotate(360deg)}}
 
-    /* ★ 메모 팝업 */
-    #notePopup{
-      position: fixed; z-index: 50; display:none;
-      max-width: 300px; padding:10px 12px; border-radius:12px;
-      background:white; border:1px solid #e5e7eb; box-shadow:0 10px 20px rgba(0,0,0,.08);
-      font-size: 13px; color:#374151; line-height:1.4;
-    }
+    /* 메모 팝업 */
+    #notePopup{ position: fixed; z-index: 50; display:none; max-width: 300px; padding:10px 12px; border-radius:12px;
+      background:white; border:1px solid #e5e7eb; box-shadow:0 10px 20px rgba(0,0,0,.08); font-size: 13px; color:#374151; line-height:1.4;}
     #notePopup .closeX{ position:absolute; right:8px; top:6px; font-size:16px; color:#6b7280; }
-    .noteIconBtn{
-      display:inline-flex; align-items:center; justify-content:center;
-      width:32px; height:32px; border:1px solid #e4e4e7; border-radius:8px; background:#fff;
-    }
+    .noteIconBtn{ display:inline-flex; align-items:center; justify-content:center; width:32px; height:32px; border:1px solid #e4e4e7; border-radius:8px; background:#fff; }
     .noteIconBtn:hover{ background:#f8fafc; }
     .noteIconBtn svg{ width:18px; height:18px; color:#0f172a; }
-  </style>
+
+    /* 카테고리 바 (칩) */
+    #catBar { display:flex; align-items:center; gap:10px; overflow-x:auto; white-space:nowrap; padding:10px 14px; }
+    .chip {
+      display:inline-flex; align-items:center; gap:8px;
+      padding:7px 14px; border:1px solid #d4d4d8; border-radius:9999px;
+      background:#ffffff; color:#374151; font-size:13px; cursor:pointer;
+      transition: background .15s, color .15s, border-color .15s, box-shadow .15s;
+    }
+    .chip.active { background:#3f3f46; color:#ffffff; border-color:#3f3f46; box-shadow: inset 0 0 0 1px rgba(255,255,255,.15);}
+    .chip:hover { box-shadow:0 1px 0 rgba(0,0,0,.04); }
+    .chip .x { display:none; margin-left:4px; font-weight:700; }
+    #catBar.delete-mode .chip .x { display:inline; }
+    .chip.plus { background:#ffffff; color:#1d4ed8; border-color:#bfdbfe; }
+    .chip.plus:hover { background:#eff6ff; }
+	
+	.icon-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 34px;
+	border-radius: 8px;
+	border: 1px solid #bfdbfe;
+	background: #eff6ff;
+	color: #1d4ed8;
+	transition: background .15s, transform .1s;
+	}
+	.icon-btn:hover { background: #dbeafe; transform: scale(1.05); }
+
+	.icon-btn.red {
+	border-color: #fecaca;
+	background: #fff1f2;
+	color: #b91c1c;
+	}
+	.icon-btn.red:hover { background: #fee2e2; transform: scale(1.05); }
+ 
+ </style>
 </head>
 <body class="bg-zinc-50 text-zinc-900 min-h-screen">
 
@@ -47,8 +76,8 @@
         <div class="flex items-center gap-3">
           <div class="relative flex-1">
             <input id="q" type="search" placeholder="검색: 사이트 이름/링크/아이디/비밀번호/메모"
-                   class="w-full pl-11 pr-12 py-3 rounded-lg border border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-400"
-                   autocomplete="off" />
+              class="w-full pl-11 pr-12 py-3 rounded-lg border border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+              autocomplete="off" />
             <svg class="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" viewBox="0 0 24 24" fill="none">
               <path d="M21 21l-4.3-4.3M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16Z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
             </svg>
@@ -61,58 +90,41 @@
     </div>
   </header>
 
-  <main class="max-w-7xl mx-auto px-4 py-6">
-    <!-- ★ 데스크톱에서 좌측 고정 230px / 우측 유동 -->
-    <div class="grid grid-cols-1 lg:flex lg:gap-6 gap-6">
-      <!-- 좌측: 카테고리 -->
-      <aside class="lg:w-[230px] lg:flex-none"><!-- ★ -->
-        <div class="sticky-col">
-          <div class="bg-white border border-zinc-200 rounded-xl">
-            <div class="p-4 border-b border-zinc-200 flex items-center justify-between">
-              <div class="text-sm font-semibold text-zinc-700">카테고리</div>
-              <button id="catEditToggle" class="btn gray text-xs">수정</button>
-            </div>
-            <div id="catList" class="p-4 space-y-2"><!-- 체크박스 렌더 --></div>
-            <div id="catEditArea" class="p-4 border-t border-zinc-100 hidden">
-              <div class="flex items-center gap-2">
-                <input id="newCat" class="input" placeholder="카테고리 추가" />
-                <button id="addCat" class="btn blue">추가</button>
-              </div>
-              <p class="text-xs text-zinc-500 mt-2">항목 옆 ❌ 로 삭제할 수 있어요.</p>
-              <div class="mt-2">
-                <button id="resetCats" class="btn text-xs">기본 4개로 초기화</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </aside>
+  <main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+    <!-- 카테고리 바 -->
+    <section id="catBarWrap" class="bg-white border border-zinc-200 rounded-xl">
+      <div class="px-4 py-3 border-b border-zinc-200 flex items-center justify-between">
+        <div class="text-sm font-semibold text-zinc-700">카테고리</div>
+        <button id="catDeleteToggle" class="btn text-xs">삭제</button>
+      </div>
+      <div id="catBar"><!-- 칩 렌더링 --></div>
+    </section>
 
-      <!-- 우측: 리스트 -->
-      <section class="lg:flex-1">
-        <div id="summary" class="text-sm text-zinc-600 mb-3"></div>
-        <div class="bg-white border border-zinc-200 rounded-xl overflow-auto">
-          <table class="table">
-            <thead>
-              <tr>
-                <th style="width:18%">사이트 이름</th>
-                <th style="width:22%">링크</th>
-                <th style="width:14%">아이디</th>
-                <th style="width:14%">비밀번호</th>
-                <th style="width:12%">카테고리</th>
-                <th style="width:8%">메모</th> <!-- ★ 추가 -->
-                <th style="width:6%">수정</th>
-                <th style="width:6%">삭제</th>
-              </tr>
-            </thead>
-            <tbody id="tbody"></tbody>
-          </table>
-        </div>
-        <p id="empty" class="hidden text-center text-zinc-500 mt-6">조건에 맞는 결과가 없습니다.</p>
-      </section>
-    </div>
+    <!-- 리스트(테이블) -->
+    <section>
+      <div id="summary" class="text-sm text-zinc-600 mb-3"></div>
+      <div class="bg-white border border-zinc-200 rounded-xl overflow-auto">
+        <table class="table">
+          <thead>
+            <tr>
+              <th style="width:18%">사이트 이름</th>
+              <th style="width:22%">링크</th>
+              <th style="width:14%">ID</th>
+              <th style="width:14%">PW</th>
+              <th style="width:12%">분류</th>
+              <th style="width:8%">메모</th>
+              <th style="width:6%">수정</th>
+              <th style="width:6%">삭제</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <p id="empty" class="hidden text-center text-zinc-500 mt-6">조건에 맞는 결과가 없습니다.</p>
+    </section>
   </main>
 
-  <!-- 메모 팝업 ★ -->
+  <!-- 메모 팝업 -->
   <div id="notePopup">
     <button class="closeX" aria-label="닫기">&times;</button>
     <div id="notePopupBody" class="pr-5 whitespace-pre-wrap"></div>
@@ -128,34 +140,16 @@
       <form id="siteForm" class="p-5 grid grid-cols-1 gap-3">
         <input type="hidden" name="id" />
         <div class="grid sm:grid-cols-2 gap-3">
-          <label class="grid gap-1">
-            <span class="text-sm text-zinc-600">사이트 이름 *</span>
-            <input name="name" required class="input" />
-          </label>
-          <label class="grid gap-1">
-            <span class="text-sm text-zinc-600">링크(URL) *</span>
-            <input name="url" required placeholder="https://example.com" class="input" />
-          </label>
+          <label class="grid gap-1"><span class="text-sm text-zinc-600">사이트 이름 *</span><input name="name" required class="input" /></label>
+          <label class="grid gap-1"><span class="text-sm text-zinc-600">링크(URL) *</span><input name="url" required placeholder="https://example.com" class="input" /></label>
         </div>
         <div class="grid sm:grid-cols-2 gap-3">
-          <label class="grid gap-1">
-            <span class="text-sm text-zinc-600">아이디</span>
-            <input name="username" class="input" />
-          </label>
-          <label class="grid gap-1">
-            <span class="text-sm text-zinc-600">비밀번호</span>
-            <input name="password" class="input" />
-          </label>
+          <label class="grid gap-1"><span class="text-sm text-zinc-600">아이디</span><input name="username" class="input" /></label>
+          <label class="grid gap-1"><span class="text-sm text-zinc-600">비밀번호</span><input name="password" class="input" /></label>
         </div>
         <div class="grid sm:grid-cols-2 gap-3">
-          <label class="grid gap-1">
-            <span class="text-sm text-zinc-600">카테고리</span>
-            <select name="category" class="input" id="categorySelect"></select>
-          </label>
-          <label class="grid gap-1">
-            <span class="text-sm text-zinc-600">메모(선택)</span>
-            <input name="note" class="input" />
-          </label>
+          <label class="grid gap-1"><span class="text-sm text-zinc-600">카테고리</span><select name="category" class="input" id="categorySelect"></select></label>
+          <label class="grid gap-1"><span class="text-sm text-zinc-600">메모(선택)</span><input name="note" class="input" /></label>
         </div>
         <div class="text-xs text-amber-600">⚠️ 비밀번호는 시트에 **평문 저장**됩니다. 실서비스는 암호화/권한설정 권장.</div>
         <div class="flex items-center justify-end gap-2 mt-2">
@@ -167,18 +161,17 @@
   </div>
 
   <script>
-  /* ====== API URL (Apps Script Web App URL 붙여넣기) ====== */
+  /* ====== API URL ====== */
   const API_URL = 'https://script.google.com/macros/s/AKfycbwhqNLE6_MUja-FtHlh4IXI-nRmTeBCnQx3hLz4wI6KZrxIrGHsC-FHbZfFETlXCbji/exec';
 
-  // ====== State & helpers ======
+  /* ====== Helpers & State ====== */
   const $ = (s, el=document)=>el.querySelector(s);
   const $$ = (s, el=document)=>[...el.querySelectorAll(s)];
-  const state = { q:'', categories:[], selectedCats:new Set(), rows:[] };
+  const state = { q:'', categories:[], selectedCats:new Set(), rows:[], deleteMode:false };
   const loadingOn  = ()=>{ const el = $('#loading'); if (el) el.classList.remove('hidden'); };
   const loadingOff = ()=>{ const el = $('#loading'); if (el) el.classList.add('hidden'); };
   const hasValidApi = /^https?:\/\/.+\/exec(\?|$)/.test(API_URL);
 
-  // ====== API ======
   async function apiGET(params={}) {
     if (!hasValidApi) throw new Error('API_URL 미설정');
     const url = API_URL + '?' + new URLSearchParams(params).toString();
@@ -188,34 +181,35 @@
   }
   async function apiPOST(payload) {
     if (!hasValidApi) throw new Error('API_URL 미설정');
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify(payload)
-    });
+    const res = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(payload) });
     if (!res.ok) throw new Error('HTTP '+res.status);
     return res.json();
   }
 
-  // ====== 카테고리 패널 ======
-  function renderCategories() {
-    const wrap = $('#catList'); wrap.innerHTML='';
+  /* ====== 카테고리 바 렌더 ====== */
+  function renderCategoryBar(){
+    const bar = $('#catBar'); bar.innerHTML='';
+    // 칩들
     state.categories.forEach(cat=>{
-      const row = document.createElement('div');
-      row.className = 'flex items-center gap-2';
-      row.innerHTML = `
-        <label class="flex items-center gap-2 flex-1">
-          <input type="checkbox" class="catChk" value="${cat}" ${state.selectedCats.has(cat)?'checked':''}>
-          <span>${cat}</span>
-        </label>
-        <button class="btn red text-xs delCat hidden" data-cat="${cat}">❌</button>
-      `;
-      wrap.appendChild(row);
+      const btn = document.createElement('button');
+      btn.className = 'chip' + (state.selectedCats.has(cat) ? ' active' : '');
+      btn.setAttribute('data-cat', cat);
+      btn.innerHTML = `<span>${cat}</span><span class="x" title="삭제">×</span>`;
+      bar.appendChild(btn);
     });
+    // + 칩
+    const add = document.createElement('button');
+    add.id='catAddBtn';
+    add.className='chip plus';
+    add.innerHTML = '＋';
+    bar.appendChild(add);
+
+    // 삭제 모드 표시
+    bar.classList.toggle('delete-mode', state.deleteMode);
+    $('#catDeleteToggle').textContent = state.deleteMode ? '삭제 종료' : '삭제';
     fillCategorySelect();
-    const editing = !$('#catEditArea').classList.contains('hidden');
-    $$('.delCat').forEach(b=> b.classList.toggle('hidden', !editing));
   }
+
   function fillCategorySelect(){
     const sel = $('#categorySelect'); sel.innerHTML='';
     state.categories.forEach(c=>{
@@ -223,19 +217,17 @@
     });
   }
 
-  // ====== 테이블 ======
+  /* ====== 필터/검색 ====== */
   function rowMatches(r){
     if (state.selectedCats.size && !state.selectedCats.has(r.category)) return false;
-    const q = state.q.trim().toLowerCase();
-    if (!q) return true;
+    const q = state.q.trim().toLowerCase(); if (!q) return true;
     const hay = [r.name,r.url,r.username,r.password,r.note,r.category].join(' ').toLowerCase();
     return hay.includes(q);
   }
 
-  // ★ 메모 아이콘 (SVG)
+  /* ====== 메모 아이콘 ====== */
   function noteIconSVG(){
-    return `
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <rect x="3.5" y="3.5" width="13" height="17" rx="2"></rect>
       <path d="M7.5 8h6M7.5 12h6M7.5 16h4"></path>
       <path d="M14.5 6.5l3.2-3.2a1.2 1.2 0 0 1 1.7 0l1.3 1.3a1.2 1.2 0 0 1 0 1.7L17.5 9.5l-3-3z"></path>
@@ -244,32 +236,51 @@
   }
 
   function renderTable(){
-    const list = state.rows.filter(rowMatches);
-    $('#summary').textContent = `총 ${state.rows.length}개 중 ${list.length}개 표시`;
-    const tbody = $('#tbody'); tbody.innerHTML = '';
-    list.forEach(r=>{
-      const tr = document.createElement('tr');
-      tr.innerHTML = `
-        <td>${r.name || '-'}</td>
-        <td><a class="text-blue-700 hover:underline" href="${r.url || '#'}" target="_blank">${(r.url||'').replace(/^https?:\/\/\/?/,'')}</a></td>
-        <td>${r.username || '-'}</td>
-        <td>${r.password || '-'}</td>
-        <td><span class="badge">${r.category || '-'}</span></td>
-        <td>
-          ${r.note ? `
-            <button class="noteIconBtn noteBtn" title="메모 보기" data-note="${(r.note||'').replace(/"/g,'&quot;')}">
-              ${noteIconSVG()}
-            </button>` : `<span class="text-zinc-400">-</span>`}
-        </td>
-        <td><button class="btn blue editRow" data-id="${r.id}">수정</button></td>
-        <td><button class="btn red delRow" data-id="${r.id}">삭제</button></td>
-      `;
-      tbody.appendChild(tr);
-    });
-    $('#empty').classList.toggle('hidden', list.length>0);
-  }
+  const list = state.rows.filter(rowMatches);
+  $('#summary').textContent = `총 ${state.rows.length}개 중 ${list.length}개 표시`;
+  const tbody = $('#tbody'); tbody.innerHTML = '';
 
-  // ====== 초기 로드 ======
+  list.forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.name || '-'}</td>
+      <td><a class="text-blue-700 hover:underline" href="${r.url || '#'}" target="_blank">${(r.url||'').replace(/^https?:\/\/\/?/,'')}</a></td>
+      <td>${r.username || '-'}</td>
+      <td>${r.password || '-'}</td>
+      <td><span class="badge">${r.category || '-'}</span></td>
+      <td>
+        ${r.note
+          ? `<button class="noteIconBtn noteBtn" title="메모 보기" data-note="${(r.note||'').replace(/"/g,'&quot;')}">
+               ${noteIconSVG()}
+             </button>`
+          : `<span class="text-zinc-400">-</span>`}
+      </td>
+      <td>
+        <button class="icon-btn editRow" title="수정" data-id="${r.id}">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
+               stroke-width="2" stroke="currentColor" class="w-5 h-5">
+            <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M16.862 4.487a2.1 2.1 0 0 1 2.971 2.971l-9.95 9.95a1 1 0 0 1-.45.26l-3.26.814a.5.5 0 0 1-.606-.606l.814-3.26a1 1 0 0 1 .26-.45l9.95-9.95z"/>
+          </svg>
+        </button>
+      </td>
+      <td>
+        <button class="icon-btn red delRow" title="삭제" data-id="${r.id}">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+               class="w-5 h-5">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+  $('#empty').classList.toggle('hidden', list.length>0);
+}
+
+  /* ====== 초기 로드 ====== */
   async function loadAll() {
     loadingOn();
     try {
@@ -277,7 +288,7 @@
         state.rows = [];
         state.categories = ['쇼핑몰','관리자','개발','업체'];
         state.selectedCats = new Set(state.categories);
-        renderCategories(); renderTable();
+        renderCategoryBar(); renderTable();
         console.warn('API_URL 미설정: UI만 표시됩니다.');
         return;
       }
@@ -286,40 +297,36 @@
       state.rows = data.accounts || [];
       state.categories = (data.categories || []).length ? data.categories : ['쇼핑몰','관리자','개발','업체'];
       state.selectedCats = new Set(state.categories);
-      renderCategories(); renderTable();
+      renderCategoryBar(); renderTable();
     } catch (e) {
       alert('데이터 로드 실패: ' + e.message);
       if (!state.categories.length) {
         state.categories = ['쇼핑몰','관리자','개발','업체'];
         state.selectedCats = new Set(state.categories);
-        renderCategories(); renderTable();
+        renderCategoryBar(); renderTable();
       }
     } finally { loadingOff(); }
   }
 
-  // ====== 모달 ======
+  /* ====== 상단 검색/추가 ====== */
   const modalBg = $('#modalBg');
   const openModal = (title)=>{ $('#modalTitle').textContent=title; modalBg.style.display='flex'; };
   const closeModal = ()=>{ modalBg.style.display='none'; $('#siteForm').reset(); $('[name=id]').value=''; };
 
-  // ====== 이벤트 바인딩 ======
-  // 상단 버튼/검색
   $('#addBtn').addEventListener('click', ()=>{ fillCategorySelect(); openModal('사이트 추가'); });
   $('#q').addEventListener('input', e=>{
     state.q = e.target.value;
     $('#clearQ').classList.toggle('hidden', !state.q);
     renderTable();
   });
-  $('#clearQ').addEventListener('click', ()=>{
-    $('#q').value=''; state.q=''; $('#clearQ').classList.add('hidden'); renderTable();
-  });
+  $('#clearQ').addEventListener('click', ()=>{ $('#q').value=''; state.q=''; $('#clearQ').classList.add('hidden'); renderTable(); });
 
-  // 모달
+  /* ====== 모달 ====== */
   $('#closeModal').addEventListener('click', closeModal);
   $('#cancelForm').addEventListener('click', closeModal);
   modalBg.addEventListener('click', (e)=>{ if (e.target===modalBg) closeModal(); });
 
-  // 행 수정/삭제
+  /* ====== 행 수정/삭제 ====== */
   document.addEventListener('click', (e)=>{
     if (e.target.matches('.editRow')){
       const id = e.target.getAttribute('data-id');
@@ -351,7 +358,7 @@
     }
   });
 
-  // 폼 저장
+  /* ====== 폼 저장 ====== */
   $('#siteForm').addEventListener('submit', async (e)=>{
     e.preventDefault();
     const fd = new FormData(e.target);
@@ -360,8 +367,7 @@
     let url = (fd.get('url')||'').toString().trim();
     if (!name || !url) { alert('사이트 이름과 링크는 필수입니다.'); return; }
     if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
-    const item = {
-      id, name, url,
+    const item = { id, name, url,
       username: (fd.get('username')||'').toString(),
       password: (fd.get('password')||'').toString(),
       category: (fd.get('category')||'').toString() || (state.categories[0]||''),
@@ -371,95 +377,86 @@
     try{
       const res = await apiPOST({ action:'upsertAccount', item });
       if (!res.ok) throw new Error(res.error || 'save failed');
-      await loadAll(); // 저장 후 재로드
+      await loadAll();
       closeModal();
     } catch(err){ alert('저장 실패: ' + err.message); }
     finally{ loadingOff(); }
   });
 
-  // 카테고리 편집/필터
-  $('#catEditToggle').addEventListener('click', ()=>{
-    const area = $('#catEditArea');
-    const nowHidden = area.classList.toggle('hidden');
-    $('#catEditToggle').textContent = nowHidden ? '수정' : '수정 종료';
-    $$('.delCat').forEach(b=> b.classList.toggle('hidden', nowHidden));
-  });
-  $('#addCat').addEventListener('click', async ()=>{
-    const v = ($('#newCat').value||'').trim();
-    if (!v) return;
-    loadingOn();
-    try{
-      const res = await apiPOST({ action:'addCategory', name:v });
-      if (!res.ok) throw new Error(res.error||'addCategory failed');
-      $('#newCat').value='';
-      const r = await apiGET({ action:'categories' });
-      state.categories = r.categories || [];
-      renderCategories(); renderTable();
-    } catch(err){ alert('카테고리 추가 실패: ' + err.message); }
-    finally{ loadingOff(); }
-  });
+  /* ====== 카테고리 바 상호작용 ====== */
+  // 칩 클릭(선택 토글) & x 삭제
   document.addEventListener('click', async (e)=>{
-    if (e.target.matches('.delCat')) {
-      const cat = e.target.getAttribute('data-cat');
-      if (!confirm(`[${cat}] 카테고리를 삭제할까요?`)) return;
-      loadingOn();
-      try{
-        const res = await apiPOST({ action:'deleteCategory', name:cat });
-        if (!res.ok) throw new Error(res.error||'deleteCategory failed');
-        const r = await apiGET({ action:'categories' });
-        state.categories = r.categories || [];
-        state.selectedCats.delete(cat);
-        renderCategories(); renderTable();
-      } catch(err){ alert('카테고리 삭제 실패: ' + err.message); }
-      finally{ loadingOff(); }
-    }
-  });
-  $('#resetCats').addEventListener('click', async ()=>{
-    if (!confirm('카테고리를 기본 4개(쇼핑몰/관리자/개발/업체)로 초기화할까요?')) return;
-    loadingOn();
-    try{
-      const res = await apiPOST({ action:'resetCategories' });
-      if (!res.ok) throw new Error(res.error||'resetCategories failed');
-      state.categories = res.categories || ['쇼핑몰','관리자','개발','업체'];
-      state.selectedCats = new Set(state.categories);
-      renderCategories(); renderTable();
-    } catch(err){ alert('초기화 실패: ' + err.message); }
-    finally{ loadingOff(); }
-  });
-  document.addEventListener('change', (e)=>{
-    if (e.target.matches('.catChk')) {
-      const v = e.target.value;
-      if (e.target.checked) state.selectedCats.add(v); else state.selectedCats.delete(v);
+    const chip = e.target.closest('.chip');
+    if (chip && !chip.classList.contains('plus')) {
+      const cat = chip.getAttribute('data-cat');
+      // 삭제 모드에서 X 클릭
+      if (e.target.classList.contains('x') && state.deleteMode){
+        if (!confirm(`[${cat}] 카테고리를 삭제할까요?`)) return;
+        loadingOn();
+        try{
+          const res = await apiPOST({ action:'deleteCategory', name:cat });
+          if (!res.ok) throw new Error(res.error||'deleteCategory failed');
+          const r = await apiGET({ action:'categories' });
+          state.categories = r.categories || [];
+          state.selectedCats.delete(cat);
+          renderCategoryBar(); renderTable();
+        } catch(err){ alert('카테고리 삭제 실패: ' + err.message); }
+        finally{ loadingOff(); }
+        return;
+      }
+      // 일반 클릭: 선택 토글
+      if (state.selectedCats.has(cat)) state.selectedCats.delete(cat);
+      else state.selectedCats.add(cat);
+      chip.classList.toggle('active');
       renderTable();
     }
   });
 
-  // ★ 메모 팝업 로직
-  const notePopup = $('#notePopup');
-  const noteBody  = $('#notePopupBody');
+  // + 칩으로 카테고리 추가
+  document.addEventListener('click', async (e)=>{
+    if (e.target.id === 'catAddBtn' || e.target.closest('#catAddBtn')){
+      const v = (prompt('추가할 카테고리 이름을 입력하세요')||'').trim();
+      if (!v) return;
+      loadingOn();
+      try{
+        const res = await apiPOST({ action:'addCategory', name:v });
+        if (!res.ok) throw new Error(res.error||'addCategory failed');
+        const r = await apiGET({ action:'categories' });
+        state.categories = r.categories || [];
+        state.selectedCats.add(v);
+        renderCategoryBar(); renderTable();
+      } catch(err){ alert('카테고리 추가 실패: ' + err.message); }
+      finally{ loadingOff(); }
+    }
+  });
+
+  // 삭제 모드 토글
+  $('#catDeleteToggle').addEventListener('click', ()=>{
+    state.deleteMode = !state.deleteMode;
+    renderCategoryBar();
+  });
+
+  /* ====== 메모 팝업 ====== */
+  const notePopup = $('#notePopup'), noteBody  = $('#notePopupBody');
   $('#notePopup .closeX').addEventListener('click', ()=> notePopup.style.display='none');
   document.addEventListener('click', (e)=>{
-    // 메모 버튼 클릭
     const btn = e.target.closest('.noteBtn');
     if (btn){
       const note = btn.getAttribute('data-note') || '';
       noteBody.textContent = note;
-      // 위치 계산 (버튼 아래 살짝)
       const rect = btn.getBoundingClientRect();
-      const top = rect.bottom + 8;
-      const left = Math.min(rect.left, window.innerWidth - 320); // 화면 밖 방지
-      notePopup.style.top = `${top}px`;
-      notePopup.style.left = `${left}px`;
+      notePopup.style.top = `${rect.bottom + 8}px`;
+      notePopup.style.left = `${Math.min(rect.left, window.innerWidth - 320)}px`;
       notePopup.style.display = 'block';
       return;
     }
-    // 팝업 바깥 클릭 시 닫기
     if (!notePopup.contains(e.target)) notePopup.style.display = 'none';
   });
 
-  // ====== 마지막에 반드시 호출! ======
-  loadAll();
-</script>
+  /* ====== 마지막 호출 ====== */
+  async function boot(){ await loadAll(); }
+  boot();
+  </script>
 
 </body>
 </html>
