@@ -21,6 +21,21 @@
     .modal { width: 680px; max-width: calc(100vw - 32px); background:white; border:1px solid #e5e7eb; border-radius:16px; }
     .spinner { width:16px; height:16px; border:2px solid #cbd5e1; border-top-color:#334155; border-radius:9999px; animation:spin 1s linear infinite; display:inline-block;}
     @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* ★ 메모 팝업 */
+    #notePopup{
+      position: fixed; z-index: 50; display:none;
+      max-width: 300px; padding:10px 12px; border-radius:12px;
+      background:white; border:1px solid #e5e7eb; box-shadow:0 10px 20px rgba(0,0,0,.08);
+      font-size: 13px; color:#374151; line-height:1.4;
+    }
+    #notePopup .closeX{ position:absolute; right:8px; top:6px; font-size:16px; color:#6b7280; }
+    .noteIconBtn{
+      display:inline-flex; align-items:center; justify-content:center;
+      width:32px; height:32px; border:1px solid #e4e4e7; border-radius:8px; background:#fff;
+    }
+    .noteIconBtn:hover{ background:#f8fafc; }
+    .noteIconBtn svg{ width:18px; height:18px; color:#0f172a; }
   </style>
 </head>
 <body class="bg-zinc-50 text-zinc-900 min-h-screen">
@@ -47,9 +62,10 @@
   </header>
 
   <main class="max-w-7xl mx-auto px-4 py-6">
-    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+    <!-- ★ 데스크톱에서 좌측 고정 230px / 우측 유동 -->
+    <div class="grid grid-cols-1 lg:flex lg:gap-6 gap-6">
       <!-- 좌측: 카테고리 -->
-      <aside class="lg:col-span-3">
+      <aside class="lg:w-[230px] lg:flex-none"><!-- ★ -->
         <div class="sticky-col">
           <div class="bg-white border border-zinc-200 rounded-xl">
             <div class="p-4 border-b border-zinc-200 flex items-center justify-between">
@@ -72,7 +88,7 @@
       </aside>
 
       <!-- 우측: 리스트 -->
-      <section class="lg:col-span-9">
+      <section class="lg:flex-1">
         <div id="summary" class="text-sm text-zinc-600 mb-3"></div>
         <div class="bg-white border border-zinc-200 rounded-xl overflow-auto">
           <table class="table">
@@ -80,11 +96,12 @@
               <tr>
                 <th style="width:18%">사이트 이름</th>
                 <th style="width:22%">링크</th>
-                <th style="width:16%">아이디</th>
-                <th style="width:16%">비밀번호</th>
-                <th style="width:14%">카테고리</th>
-                <th style="width:7%">수정</th>
-                <th style="width:7%">삭제</th>
+                <th style="width:14%">아이디</th>
+                <th style="width:14%">비밀번호</th>
+                <th style="width:12%">카테고리</th>
+                <th style="width:8%">메모</th> <!-- ★ 추가 -->
+                <th style="width:6%">수정</th>
+                <th style="width:6%">삭제</th>
               </tr>
             </thead>
             <tbody id="tbody"></tbody>
@@ -94,6 +111,12 @@
       </section>
     </div>
   </main>
+
+  <!-- 메모 팝업 ★ -->
+  <div id="notePopup">
+    <button class="closeX" aria-label="닫기">&times;</button>
+    <div id="notePopupBody" class="pr-5 whitespace-pre-wrap"></div>
+  </div>
 
   <!-- 추가/수정 모달 -->
   <div id="modalBg" class="modal-bg">
@@ -167,7 +190,7 @@
     if (!hasValidApi) throw new Error('API_URL 미설정');
     const res = await fetch(API_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'text/plain' }, // Apps Script: e.postData.contents
+      headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(payload)
     });
     if (!res.ok) throw new Error('HTTP '+res.status);
@@ -208,6 +231,18 @@
     const hay = [r.name,r.url,r.username,r.password,r.note,r.category].join(' ').toLowerCase();
     return hay.includes(q);
   }
+
+  // ★ 메모 아이콘 (SVG)
+  function noteIconSVG(){
+    return `
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="3.5" y="3.5" width="13" height="17" rx="2"></rect>
+      <path d="M7.5 8h6M7.5 12h6M7.5 16h4"></path>
+      <path d="M14.5 6.5l3.2-3.2a1.2 1.2 0 0 1 1.7 0l1.3 1.3a1.2 1.2 0 0 1 0 1.7L17.5 9.5l-3-3z"></path>
+      <path d="M14 7l3 3"></path>
+    </svg>`;
+  }
+
   function renderTable(){
     const list = state.rows.filter(rowMatches);
     $('#summary').textContent = `총 ${state.rows.length}개 중 ${list.length}개 표시`;
@@ -220,6 +255,12 @@
         <td>${r.username || '-'}</td>
         <td>${r.password || '-'}</td>
         <td><span class="badge">${r.category || '-'}</span></td>
+        <td>
+          ${r.note ? `
+            <button class="noteIconBtn noteBtn" title="메모 보기" data-note="${(r.note||'').replace(/"/g,'&quot;')}">
+              ${noteIconSVG()}
+            </button>` : `<span class="text-zinc-400">-</span>`}
+        </td>
         <td><button class="btn blue editRow" data-id="${r.id}">수정</button></td>
         <td><button class="btn red delRow" data-id="${r.id}">삭제</button></td>
       `;
@@ -393,10 +434,32 @@
     }
   });
 
+  // ★ 메모 팝업 로직
+  const notePopup = $('#notePopup');
+  const noteBody  = $('#notePopupBody');
+  $('#notePopup .closeX').addEventListener('click', ()=> notePopup.style.display='none');
+  document.addEventListener('click', (e)=>{
+    // 메모 버튼 클릭
+    const btn = e.target.closest('.noteBtn');
+    if (btn){
+      const note = btn.getAttribute('data-note') || '';
+      noteBody.textContent = note;
+      // 위치 계산 (버튼 아래 살짝)
+      const rect = btn.getBoundingClientRect();
+      const top = rect.bottom + 8;
+      const left = Math.min(rect.left, window.innerWidth - 320); // 화면 밖 방지
+      notePopup.style.top = `${top}px`;
+      notePopup.style.left = `${left}px`;
+      notePopup.style.display = 'block';
+      return;
+    }
+    // 팝업 바깥 클릭 시 닫기
+    if (!notePopup.contains(e.target)) notePopup.style.display = 'none';
+  });
+
   // ====== 마지막에 반드시 호출! ======
   loadAll();
 </script>
-
 
 </body>
 </html>
